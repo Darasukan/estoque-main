@@ -22,6 +22,8 @@ const items = ref(loadItems())
 const variations = ref(loadVariations())
 const orderData = ref(loadOrder())
 const activeGroup = ref(null)
+const activeCategory = ref(null)
+const activeSubcategory = ref(null)
 const activeFilters = ref({})
 const viewingItemId = ref(null) // item currently open in detail view
 
@@ -304,6 +306,19 @@ export function useItems() {
   // ===== Sidebar navigation =====
   function setActiveGroup(group) {
     activeGroup.value = activeGroup.value === group ? null : group
+    activeCategory.value = null
+    activeSubcategory.value = null
+    activeFilters.value = {}
+  }
+
+  function setActiveCategory(cat) {
+    activeCategory.value = cat
+    activeSubcategory.value = null
+    activeFilters.value = {}
+  }
+
+  function setActiveSubcategory(sub) {
+    activeSubcategory.value = sub
     activeFilters.value = {}
   }
 
@@ -438,11 +453,33 @@ export function useItems() {
 
   // ===== Viewing item =====
   function setViewingItem(id) {
+    if (viewingItemId.value !== (id || null)) {
+      activeFilters.value = {}
+    }
     viewingItemId.value = id || null
   }
 
   // ===== Faceted Filtering =====
   function toggleFilter(facetKey, value) {
+    // Hierarchy facets act as navigation instead of plain filters
+    if (facetKey === 'category') {
+      // Toggle: if already navigated to this category, go back; otherwise navigate into it
+      if (activeCategory.value === value) {
+        setActiveCategory(null)
+      } else {
+        setActiveCategory(value)
+      }
+      return
+    }
+    if (facetKey === 'subcategory') {
+      if (activeSubcategory.value === value) {
+        setActiveSubcategory(null)
+      } else {
+        setActiveSubcategory(value)
+      }
+      return
+    }
+
     const f = { ...activeFilters.value }
     if (!f[facetKey]) {
       f[facetKey] = [value]
@@ -460,12 +497,22 @@ export function useItems() {
   }
 
   function clearFilters() {
+    activeCategory.value = null
+    activeSubcategory.value = null
     activeFilters.value = {}
   }
 
   const groupItems = computed(() => {
     if (!activeGroup.value) return []
     return items.value.filter(i => i.group === activeGroup.value)
+  })
+
+  // Items scoped to the current navigation path (group + category + subcategory)
+  const navigationItems = computed(() => {
+    let r = groupItems.value
+    if (activeCategory.value) r = r.filter(i => i.category === activeCategory.value)
+    if (activeSubcategory.value) r = r.filter(i => i.subcategory === activeSubcategory.value)
+    return r
   })
 
   const filteredResults = computed(() => {
@@ -484,7 +531,7 @@ export function useItems() {
   })
 
   const facets = computed(() => {
-    const all = groupItems.value
+    const all = navigationItems.value
     if (!all.length) return []
     const { hierarchy: hF, attrs: aF } = _splitFilters(activeFilters.value)
     const out = []
@@ -511,7 +558,7 @@ export function useItems() {
 
     // ── Normal group view: hierarchy + attribute facets ──
 
-    // Hierarchy facets
+    // Hierarchy facets — skip levels already determined by navigation
     for (const d of [
       { key: 'category', label: 'Categoria', get: i => i.category || '' },
       { key: 'subcategory', label: 'Subcategoria', get: i => i.subcategory || '' },
@@ -521,6 +568,10 @@ export function useItems() {
       }},
       { key: 'unit', label: 'Unidade', get: i => i.unit }
     ]) {
+      // Skip hierarchy facets already resolved by navigation
+      if (d.key === 'category' && activeCategory.value) continue
+      if (d.key === 'subcategory' && activeSubcategory.value) continue
+
       const oH = { ...hF }; delete oH[d.key]
       let c = all
       if (Object.keys(oH).length) c = c.filter(i => _itemMatchesH(i, oH))
@@ -538,7 +589,7 @@ export function useItems() {
       }
     }
 
-    // Attribute facets — scoped to items matching current hierarchy filters
+    // Attribute facets — scoped to navigation + hierarchy filters
     const hFilteredItems = Object.keys(hF).length ? all.filter(i => _itemMatchesH(i, hF)) : all
     const attrSet = new Set()
     for (const item of hFilteredItems) for (const a of item.attributes || []) attrSet.add(a)
@@ -564,12 +615,18 @@ export function useItems() {
     return out
   })
 
-  const hasActiveFilters = computed(() => Object.keys(activeFilters.value).length > 0)
+  const hasActiveFilters = computed(() =>
+    activeCategory.value !== null ||
+    activeSubcategory.value !== null ||
+    Object.keys(activeFilters.value).length > 0
+  )
 
   return {
     items,
     variations,
     activeGroup,
+    activeCategory,
+    activeSubcategory,
     // CRUD
     addItem, editItem, deleteItem,
     // Variations
@@ -586,11 +643,11 @@ export function useItems() {
     // Attribute management
     getItemsForSubcategory, renameAttribute, addAttribute, removeAttribute,
     // Navigation
-    setActiveGroup,
+    setActiveGroup, setActiveCategory, setActiveSubcategory,
     // Viewing item
     setViewingItem,
     // Faceted filtering
-    groupItems, filteredResults, facets, hasActiveFilters,
+    groupItems, navigationItems, filteredResults, facets, hasActiveFilters,
     toggleFilter, clearFilters,
     // Reorder
     reorderGroups, reorderCategories, reorderSubcategories, reorderItemAttributes,

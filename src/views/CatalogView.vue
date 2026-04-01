@@ -8,8 +8,9 @@ import { generateSeedData } from '../data/seedData.js'
 
 const {
   items, variations,
-  activeGroup, uniqueGroups, setActiveGroup,
-  groupItems,
+  activeGroup, activeCategory, activeSubcategory,
+  uniqueGroups, setActiveGroup, setActiveCategory, setActiveSubcategory,
+  groupItems, navigationItems,
   getVariationsForItem, addVariation, editVariation, deleteVariation, getTotalStock,
   getCategoriesForGroup, getSubcategoriesForCategory,
   toggleFilter, clearFilters, setViewingItem,
@@ -24,17 +25,8 @@ const { activeLocais } = useLocations()
 const searchQuery = ref('')
 const searchNorm = computed(() => searchQuery.value.trim().toLowerCase())
 
-// ===== Hierarchical navigation =====
-const activeCategory = ref(null)
-const activeSubcategory = ref(null)
-
-// Reset children when parent changes
-watch(() => activeGroup.value, () => {
-  activeCategory.value = null
-  activeSubcategory.value = null
-  searchQuery.value = ''
-})
-watch(activeCategory, () => { activeSubcategory.value = null })
+// Reset search when group changes
+watch(() => activeGroup.value, () => { searchQuery.value = '' })
 
 // Categories and subcategories for the current nav level
 const groupCategories = computed(() =>
@@ -45,14 +37,6 @@ const categorySubcategories = computed(() =>
     ? getSubcategoriesForCategory(activeGroup.value, activeCategory.value)
     : []
 )
-
-// Items scoped to current nav path (group + category + subcategory)
-const navigationItems = computed(() => {
-  let r = groupItems.value
-  if (activeCategory.value) r = r.filter(i => i.category === activeCategory.value)
-  if (activeSubcategory.value) r = r.filter(i => i.subcategory === activeSubcategory.value)
-  return r
-})
 
 // Grid stat helpers
 function categoryCount(cat) {
@@ -75,8 +59,9 @@ const viewingItem = ref(null)
 const varSearchQuery = ref('')
 const varSearchNorm = computed(() => varSearchQuery.value.trim().toLowerCase())
 
-// Close item when group changes
-watch(() => activeGroup.value, () => { viewingItem.value = null })
+// Close item when group or category changes
+watch(() => activeGroup.value, () => { viewingItem.value = null; setViewingItem(null) })
+watch(() => activeCategory.value, () => { viewingItem.value = null; setViewingItem(null) })
 
 function openItem(item) {
   viewingItem.value = item
@@ -104,23 +89,18 @@ watch(navigationItems, (navItems) => {
 
 // Breadcrumb navigation
 function goToGroup() {
-  activeCategory.value = null
-  activeSubcategory.value = null
-  clearFilters()
+  setActiveCategory(null)
   closeItem()
 }
 
 function goToCategory(category) {
-  activeCategory.value = category
-  activeSubcategory.value = null
-  clearFilters()
+  setActiveCategory(category)
   closeItem()
 }
 
 function goToSubcategory(category, subcategory) {
-  activeCategory.value = category
-  activeSubcategory.value = subcategory
-  clearFilters()
+  setActiveCategory(category)
+  setActiveSubcategory(subcategory)
   closeItem()
 }
 
@@ -731,7 +711,7 @@ const searchedResults = computed(() => {
           v-for="cat in groupCategories"
           :key="cat"
           class="group text-left p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all cursor-pointer"
-          @click="activeCategory = cat"
+          @click="setActiveCategory(cat)"
         >
           <div class="w-10 h-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center mb-3 group-hover:bg-primary-100 dark:group-hover:bg-primary-900/50 transition-colors">
             <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
@@ -779,7 +759,7 @@ const searchedResults = computed(() => {
           v-for="sub in categorySubcategories"
           :key="sub"
           class="group text-left p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all cursor-pointer"
-          @click="activeSubcategory = sub"
+          @click="setActiveSubcategory(sub)"
         >
           <div class="w-10 h-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center mb-3 group-hover:bg-primary-100 dark:group-hover:bg-primary-900/50 transition-colors">
             <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
