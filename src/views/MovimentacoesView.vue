@@ -902,10 +902,10 @@ defineExpose({
       </div>
 
       <!-- ===== STEP 3: Form ===== -->
-      <div v-else-if="step === 3" class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div v-else-if="step === 3" class="rounded-xl border border-gray-200 dark:border-gray-700">
 
         <!-- Header -->
-        <div class="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-t-xl">
           <button
             class="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
             @click="backToStep2"
@@ -926,7 +926,7 @@ defineExpose({
         </div>
 
         <!-- Form body -->
-        <div class="bg-white dark:bg-gray-900 p-5 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 max-w-2xl">
+        <div class="bg-white dark:bg-gray-900 p-5 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
 
           <!-- Quantidade -->
           <div class="md:col-span-2">
@@ -1272,7 +1272,7 @@ defineExpose({
         </div>
 
         <!-- Footer -->
-        <div class="px-5 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center gap-3">
+        <div class="px-5 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-b-xl flex items-center gap-3">
           <button
             class="px-5 py-2.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
             :class="canConfirm
