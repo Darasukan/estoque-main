@@ -120,7 +120,13 @@ const LOCAIS_KEY = 'locaisData'
 
 export function loadLocais() {
   const saved = localStorage.getItem(LOCAIS_KEY)
-  return saved ? JSON.parse(saved) : []
+  if (!saved) return []
+  const data = JSON.parse(saved)
+  // Migration: ensure parentId field exists on all locais
+  for (const l of data) {
+    if (l.parentId === undefined) l.parentId = null
+  }
+  return data
 }
 
 export function saveLocais(data) {
@@ -138,7 +144,13 @@ const DESTINATIONS_KEY = 'destinationsData'
 
 export function loadDestinations() {
   const saved = localStorage.getItem(DESTINATIONS_KEY)
-  return saved ? JSON.parse(saved) : []
+  if (!saved) return []
+  const data = JSON.parse(saved)
+  // Migration: ensure parentId field exists on all destinations
+  for (const d of data) {
+    if (d.parentId === undefined) d.parentId = null
+  }
+  return data
 }
 
 export function saveDestinations(data) {

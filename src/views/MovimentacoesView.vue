@@ -16,7 +16,7 @@ const {
   navigationItems, setViewingItem
 } = useItems()
 const { movements, addMovement, editMovement, deleteMovement } = useMovements()
-const { activeDestinations, getDestinationName } = useDestinations()
+const { activeDestinations, groupedDestinations, getDestinationName, getDestFullName } = useDestinations()
 const { activePeople } = usePeople()
 const { success, error } = useToast()
 
@@ -49,6 +49,7 @@ const selectedItem = ref(null)
 const selectedVariation = ref(null)
 const searchInputEl = ref(null)
 const qtyInputEl = ref(null)
+const destSearchInputEl = ref(null)
 
 const form = ref({
   qty: '',
@@ -69,6 +70,7 @@ function selectDocType(v) {
 
 const personDropdownOpen = ref(false)
 const destDropdownOpen = ref(false)
+const destSearch = ref('')
 const docDropdownOpen = ref(false)
 
 function resetFlow() {
@@ -83,6 +85,7 @@ function resetFlow() {
   confirmPending.value = false
   personDropdownOpen.value = false
   destDropdownOpen.value = false
+  destSearch.value = ''
   docDropdownOpen.value = false
   nextTick(() => searchInputEl.value?.focus())
 }
@@ -180,14 +183,35 @@ function backToStep2() {
 const linkedDestinationIds = computed(() =>
   selectedVariation.value?.destinations || []
 )
+
+// Ordered flat list: parent then children, for hierarchical display
+const orderedActiveDestinations = computed(() => {
+  const list = []
+  for (const g of groupedDestinations.value) {
+    list.push(g.parent)
+    for (const c of g.children) list.push(c)
+  }
+  return list
+})
+
 const linkedDestinations = computed(() =>
-  linkedDestinationIds.value
-    .map(id => activeDestinations.value.find(d => d.id === id))
-    .filter(Boolean)
+  orderedActiveDestinations.value.filter(d => linkedDestinationIds.value.includes(d.id))
 )
 const otherDestinations = computed(() =>
-  activeDestinations.value.filter(d => !linkedDestinationIds.value.includes(d.id))
+  orderedActiveDestinations.value.filter(d => !linkedDestinationIds.value.includes(d.id))
 )
+
+// Filtered by search
+const filteredLinkedDests = computed(() => {
+  const q = destSearch.value.trim().toLowerCase()
+  if (!q) return linkedDestinations.value
+  return linkedDestinations.value.filter(d => getDestFullName(d.id).toLowerCase().includes(q))
+})
+const filteredOtherDests = computed(() => {
+  const q = destSearch.value.trim().toLowerCase()
+  if (!q) return otherDestinations.value
+  return otherDestinations.value.filter(d => getDestFullName(d.id).toLowerCase().includes(q))
+})
 
 // Select-box controller refs ('__outro__' = free-text mode)
 const personSelectVal = ref('')
@@ -1099,43 +1123,52 @@ defineExpose({
                 Local de destino <span class="text-red-500">*</span>
               </label>
               <template v-if="activeDestinations.length">
-                <!-- Custom dropdown -->
+                <!-- Combobox dropdown -->
                 <div class="relative">
-                  <div v-if="destDropdownOpen" class="fixed inset-0 z-10" @click="destDropdownOpen = false"></div>
-                  <button
-                    type="button"
-                    class="w-full flex items-center justify-between px-3 py-2.5 text-sm border rounded-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none transition-colors"
+                  <div v-if="destDropdownOpen" class="fixed inset-0 z-10" @click="destDropdownOpen = false; destSearch = ''"></div>
+                  <div
+                    class="w-full flex items-center gap-1 px-3 py-2.5 text-sm border rounded-xl bg-white dark:bg-gray-800 transition-colors cursor-text"
                     :class="destDropdownOpen
                       ? 'border-primary-500 ring-1 ring-primary-500'
                       : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'"
-                    @click="destDropdownOpen = !destDropdownOpen"
+                    @click="destDropdownOpen = true; $nextTick(() => $event.currentTarget.querySelector('input')?.focus())"
                   >
-                    <span :class="!destSelectVal ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-100'">
-                      <template v-if="!destSelectVal">— Selecione… —</template>
-                      <template v-else-if="destSelectVal === '__outro__'"><em class="not-italic text-gray-500 dark:text-gray-400">Outro (digitar)…</em></template>
-                      <template v-else>
-                        <span v-if="linkedDestinations.find(d => d.name === destSelectVal)" class="mr-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">📌 vinculado</span>
-                        {{ destSelectVal }}
-                      </template>
+                    <span v-if="destSelectVal && destSelectVal !== '__outro__' && !destDropdownOpen" class="flex-1 truncate text-gray-800 dark:text-gray-100 flex items-center gap-1">
+                      <span v-if="linkedDestinations.find(d => getDestFullName(d.id) === destSelectVal)" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">📌</span>
+                      {{ destSelectVal }}
                     </span>
+                    <input
+                      v-show="destDropdownOpen || !destSelectVal || destSelectVal === '__outro__'"
+                      v-model="destSearch"
+                      ref="destSearchInputEl"
+                      type="text"
+                      :placeholder="destSelectVal === '__outro__' ? 'Outro (digitar)…' : 'Pesquisar destino...'"
+                      autocomplete="off"
+                      class="flex-1 min-w-0 bg-transparent text-sm text-gray-800 dark:text-gray-100 outline-none placeholder-gray-400 dark:placeholder-gray-500"
+                      @focus="destDropdownOpen = true"
+                      @keydown.escape.stop="destDropdownOpen = false; destSearch = ''"
+                    />
+                    <button
+                      v-if="destSelectVal && !destDropdownOpen"
+                      type="button"
+                      class="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                      @click.stop="destSelectVal = ''; destSearch = ''"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
                     <svg class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-150" :class="destDropdownOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                     </svg>
-                  </button>
+                  </div>
                   <!-- Panel -->
                   <div
                     v-if="destDropdownOpen"
                     class="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl overflow-hidden"
                   >
                     <div class="max-h-56 overflow-y-auto py-1">
-                      <button
-                        type="button"
-                        class="w-full text-left px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors"
-                        @click="destSelectVal = ''; destDropdownOpen = false"
-                      >— Selecione… —</button>
 
                       <!-- Linked group -->
-                      <template v-if="linkedDestinations.length">
+                      <template v-if="filteredLinkedDests.length">
                         <div class="px-3 pt-2 pb-0.5">
                           <p class="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-500 flex items-center gap-1">
                             <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.653 16.915l-.005-.003-.019-.01a20.759 20.759 0 0 1-1.162-.682 22.045 22.045 0 0 1-2.582-2.09c-1.736-1.766-3.133-3.986-3.133-6.312 0-2.47 2.028-4.318 4.5-4.318 1.18 0 2.31.48 3.148 1.315.839-.836 1.968-1.315 3.148-1.315 2.472 0 4.5 1.848 4.5 4.318 0 2.326-1.397 4.546-3.133 6.312a22.044 22.044 0 0 1-2.582 2.09 20.759 20.759 0 0 1-1.182.692l-.005.003h-.002a.739.739 0 0 1-.686 0l-.002-.001Z" /></svg>
@@ -1143,57 +1176,68 @@ defineExpose({
                           </p>
                         </div>
                         <button
-                          v-for="d in linkedDestinations"
+                          v-for="d in filteredLinkedDests"
                           :key="d.id"
                           type="button"
-                          class="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors"
-                          :class="destSelectVal === d.name
-                            ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                            : 'text-gray-800 dark:text-gray-100 hover:bg-amber-50 dark:hover:bg-amber-900/10'"
-                          @click="destSelectVal = d.name; destDropdownOpen = false"
+                          class="w-full text-left py-2 text-sm flex items-center gap-2 transition-colors"
+                          :class="[
+                            destSelectVal === getDestFullName(d.id)
+                              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                              : 'text-gray-800 dark:text-gray-100 hover:bg-amber-50 dark:hover:bg-amber-900/10',
+                            d.parentId ? 'pl-7 pr-3' : 'px-3'
+                          ]"
+                          @click="destSelectVal = getDestFullName(d.id); destDropdownOpen = false; destSearch = ''"
                         >
-                          <svg v-if="destSelectVal === d.name" class="w-3.5 h-3.5 text-primary-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                          <svg v-if="destSelectVal === getDestFullName(d.id)" class="w-3.5 h-3.5 text-primary-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
                           <span v-else class="w-3.5"></span>
-                          {{ d.name }}
+                          <svg v-if="d.parentId" class="w-3 h-3 flex-shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                          {{ d.parentId ? d.name : getDestFullName(d.id) }}
                         </button>
                       </template>
 
                       <!-- Other group -->
-                      <template v-if="otherDestinations.length">
+                      <template v-if="filteredOtherDests.length">
                         <div class="px-3 pt-2 pb-0.5" :class="linkedDestinations.length ? 'mt-1' : ''">
                           <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                             {{ linkedDestinations.length ? 'Outros destinos' : 'Destinos' }}
                           </p>
                         </div>
                         <button
-                          v-for="d in otherDestinations"
+                          v-for="d in filteredOtherDests"
                           :key="d.id"
                           type="button"
-                          class="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors"
-                          :class="destSelectVal === d.name
-                            ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                            : 'text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700/60'"
-                          @click="destSelectVal = d.name; destDropdownOpen = false"
+                          class="w-full text-left py-2 text-sm flex items-center gap-2 transition-colors"
+                          :class="[
+                            destSelectVal === getDestFullName(d.id)
+                              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                              : 'text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700/60',
+                            d.parentId ? 'pl-7 pr-3' : 'px-3'
+                          ]"
+                          @click="destSelectVal = getDestFullName(d.id); destDropdownOpen = false; destSearch = ''"
                         >
-                          <svg v-if="destSelectVal === d.name" class="w-3.5 h-3.5 text-primary-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                          <svg v-if="destSelectVal === getDestFullName(d.id)" class="w-3.5 h-3.5 text-primary-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
                           <span v-else class="w-3.5"></span>
-                          {{ d.name }}
+                          <svg v-if="d.parentId" class="w-3 h-3 flex-shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                          {{ d.parentId ? d.name : getDestFullName(d.id) }}
                         </button>
                       </template>
 
-                      <div class="mx-2 my-1 border-t border-gray-100 dark:border-gray-700"></div>
-                      <button
-                        type="button"
-                        class="w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2"
-                        :class="destSelectVal === '__outro__'
-                          ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                          : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/60'"
-                        @click="destSelectVal = '__outro__'; destDropdownOpen = false"
-                      >
-                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg>
-                        <em class="not-italic">Outro (digitar)…</em>
-                      </button>
+                      <!-- No results -->
+                      <p v-if="destSearch.trim() && !filteredLinkedDests.length && !filteredOtherDests.length" class="px-3 py-2 text-xs text-gray-400 italic">Nenhum resultado para "{{ destSearch }}"</p>
                     </div>
+
+                    <div class="mx-2 my-1 border-t border-gray-100 dark:border-gray-700"></div>
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2"
+                      :class="destSelectVal === '__outro__'
+                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/60'"
+                      @click="destSelectVal = '__outro__'; destDropdownOpen = false; destSearch = ''"
+                    >
+                      <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg>
+                      <em class="not-italic">Outro (digitar)…</em>
+                    </button>
                   </div>
                 </div>
                 <input

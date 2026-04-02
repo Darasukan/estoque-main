@@ -20,8 +20,8 @@ const {
 } = useItems()
 
 const { success, error } = useToast()
-const { activeDestinations, getDestinationName } = useDestinations()
-const { activeLocais } = useLocations()
+const { activeDestinations, groupedDestinations, getDestinationName, getDestFullName } = useDestinations()
+const { activeLocais, groupedLocais, getFullName } = useLocations()
 
 // ===== Search =====
 const searchQuery = ref('')
@@ -213,16 +213,39 @@ const destsSearch = ref('')
 const localDropStyle = ref({})
 const destsDropStyle = ref({})
 
+const localDisplayList = computed(() => {
+  const list = []
+  for (const g of groupedLocais.value) {
+    const fullName = g.parent.name
+    list.push({ id: g.parent.id, label: fullName, indent: false })
+    for (const c of g.children) {
+      list.push({ id: c.id, label: `${g.parent.name} > ${c.name}`, indent: true })
+    }
+  }
+  return list
+})
+
 const localFilteredLocais = computed(() => {
   const q = (varForm.value.location || '').toLowerCase()
-  if (!q) return activeLocais.value
-  return activeLocais.value.filter(l => l.name.toLowerCase().includes(q))
+  if (!q) return localDisplayList.value
+  return localDisplayList.value.filter(l => l.label.toLowerCase().includes(q))
+})
+
+const destDisplayList = computed(() => {
+  const list = []
+  for (const g of groupedDestinations.value) {
+    list.push({ id: g.parent.id, label: g.parent.name, indent: false })
+    for (const c of g.children) {
+      list.push({ id: c.id, label: `${g.parent.name} > ${c.name}`, indent: true })
+    }
+  }
+  return list
 })
 
 const destsFiltered = computed(() => {
   const q = destsSearch.value.toLowerCase()
-  if (!q) return activeDestinations.value
-  return activeDestinations.value.filter(d => d.name.toLowerCase().includes(q))
+  if (!q) return destDisplayList.value
+  return destDisplayList.value.filter(d => d.label.toLowerCase().includes(q))
 })
 
 function _rectStyle(el, minW = 0) {
@@ -231,7 +254,7 @@ function _rectStyle(el, minW = 0) {
 }
 
 function openLocalDrop(inputEl) {
-  if (!activeLocais.value.length) return
+  if (!localDisplayList.value.length) return
   localDropStyle.value = _rectStyle(inputEl)
   localDropOpen.value = true
 }
@@ -243,14 +266,14 @@ function openDestsDrop(inputEl) {
   destsDropOpen.value = true
 }
 
-function selectLocal(name) {
-  varForm.value.location = name
+function selectLocal(label) {
+  varForm.value.location = label
   localDropOpen.value = false
 }
 
 function selectFirstLocal() {
   if (localDropOpen.value && localFilteredLocais.value.length) {
-    selectLocal(localFilteredLocais.value[0].name)
+    selectLocal(localFilteredLocais.value[0].label)
   }
 }
 
@@ -965,7 +988,7 @@ const searchedResults = computed(() => {
     <!-- Transparent backdrop: click outside closes dropdowns -->
     <div v-if="localDropOpen || destsDropOpen" class="fixed inset-0" style="z-index:9998" @click="closeAllDrops" />
 
-    <!-- Local suggestions -->
+    <!-- Local suggestions (grouped) -->
     <div
       v-if="localDropOpen && localFilteredLocais.length"
       :style="[localDropStyle, { minWidth: 'max-content' }]"
@@ -975,23 +998,26 @@ const searchedResults = computed(() => {
         v-for="l in localFilteredLocais" :key="l.id"
         type="button"
         class="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-primary-50 dark:hover:bg-primary-900/20 flex items-center gap-2"
-        @mousedown.prevent="selectLocal(l.name)"
+        :class="l.indent ? 'pl-7' : 'font-medium'"
+        @mousedown.prevent="selectLocal(l.label)"
       >
-        <svg class="w-3.5 h-3.5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
-        {{ l.name }}
+        <svg v-if="!l.indent" class="w-3.5 h-3.5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+        <svg v-else class="w-3 h-3 flex-shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+        {{ l.indent ? l.label.split(' > ').pop() : l.label }}
       </button>
     </div>
 
     <!-- Destinations multi-select -->
     <div
-      v-if="destsDropOpen && activeDestinations.length"
+      v-if="destsDropOpen && destDisplayList.length"
       :style="destsDropStyle"
       class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl overflow-hidden py-1 max-h-52 overflow-y-auto"
     >
       <button
         v-for="d in destsFiltered" :key="d.id"
         type="button"
-        class="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer text-left"
+        class="w-full flex items-center gap-2.5 py-1.5 hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer text-left"
+        :class="d.indent ? 'pl-7 pr-3' : 'px-3'"
         @mousedown.prevent="toggleDest(d.id)"
       >
         <span
@@ -1002,7 +1028,9 @@ const searchedResults = computed(() => {
         >
           <svg v-if="varForm.destinations.includes(d.id)" class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
         </span>
-        <span class="text-sm text-gray-700 dark:text-gray-200">{{ d.name }}</span>
+        <svg v-if="!d.indent" class="w-3.5 h-3.5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+        <svg v-else class="w-3 h-3 flex-shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+        <span class="text-sm" :class="d.indent ? 'text-gray-700 dark:text-gray-200' : 'font-medium text-gray-800 dark:text-gray-100'">{{ d.indent ? d.label.split(' > ').pop() : d.label }}</span>
       </button>
       <p v-if="destsSearch && !destsFiltered.length" class="px-3 py-2 text-xs text-gray-400 italic">Nenhum resultado para "{{ destsSearch }}"</p>
     </div>

@@ -17,7 +17,7 @@ const {
 } = useItems()
 
 const { success, error } = useToast()
-const { activeLocais } = useLocations()
+const { activeLocais, groupedLocais } = useLocations()
 
 // Returns unique extra-field keys used across all variations of an item
 function getItemExtraKeys(itemId) {
@@ -1072,7 +1072,10 @@ function isDragTarget(type, idx) { return dragCtx.value?.type === type && dragTo
                           autofocus
                         >
                           <option value="">— Sem local —</option>
-                          <option v-for="l in activeLocais" :key="l.id" :value="l.name">{{ l.name }}</option>
+                          <template v-for="g in groupedLocais" :key="g.parent.id">
+                            <option :value="g.parent.name">{{ g.parent.name }}</option>
+                            <option v-for="c in g.children" :key="c.id" :value="g.parent.name + ' > ' + c.name">&nbsp;&nbsp;↳ {{ c.name }}</option>
+                          </template>
                         </select>
                         <button class="p-0.5 text-green-500 hover:text-green-600" @click.stop="saveEditLocation(item.id)">
                           <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
