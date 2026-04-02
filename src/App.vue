@@ -20,6 +20,7 @@ const { isAdmin, logout } = useAuth()
 provide('isAdmin', isAdmin)
 const showLoginModal = ref(false)
 const sidebarCollapsed = ref(false)
+const catalogSearch = ref('')
 const activeTab = ref('catalogo') // 'catalogo' | 'cadastros' | 'inventario' | 'movimentacoes'
 const movBrowsing = ref(true)
 const movSubTab = ref('entrada')
@@ -52,10 +53,12 @@ const tabs = computed(() => allTabs.filter(t => !t.adminOnly || isAdmin.value))
       :collapsed="sidebarCollapsed"
       :facets="facets"
       :has-active-filters="hasActiveFilters"
+      :search="catalogSearch"
       @toggle="sidebarCollapsed = !sidebarCollapsed"
       @select-group="(g) => setActiveGroup(g)"
       @toggle-filter="(k, v) => toggleFilter(k, v)"
       @clear-filters="clearFilters"
+      @update:search="v => catalogSearch = v"
     />
 
     <!-- History Sidebar -->
@@ -150,7 +153,7 @@ const tabs = computed(() => allTabs.filter(t => !t.adminOnly || isAdmin.value))
       <!-- Page content -->
       <main class="flex-1 p-5">
         <!-- Catálogo tab -->
-        <CatalogView v-if="activeTab === 'catalogo'" />
+        <CatalogView v-if="activeTab === 'catalogo'" :search="catalogSearch" @update:search="v => catalogSearch = v" />
 
         <!-- Cadastros tab -->
         <CadastrosView v-else-if="activeTab === 'cadastros'" />

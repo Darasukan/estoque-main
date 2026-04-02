@@ -8,6 +8,11 @@ import { generateSeedData } from '../data/seedData.js'
 
 const isAdmin = inject('isAdmin')
 
+const props = defineProps({
+  search: { type: String, default: '' }
+})
+const emit = defineEmits(['update:search'])
+
 const {
   items, variations,
   activeGroup, activeCategory, activeSubcategory,
@@ -24,11 +29,14 @@ const { activeDestinations, groupedDestinations, getDestinationName, getDestFull
 const { activeLocais, groupedLocais, getFullName } = useLocations()
 
 // ===== Search =====
-const searchQuery = ref('')
-const searchNorm = computed(() => searchQuery.value.trim().toLowerCase())
+const searchQuery = computed({
+  get: () => props.search,
+  set: (v) => emit('update:search', v)
+})
+const searchNorm = computed(() => props.search.trim().toLowerCase())
 
-// Reset search when group changes
-watch(() => activeGroup.value, () => { searchQuery.value = '' })
+// Reset search only when user manually navigates (not auto-drill)
+const autoDrilling = ref(false)
 
 // Categories and subcategories for the current nav level
 const groupCategories = computed(() =>
@@ -89,6 +97,66 @@ watch(navigationItems, (navItems) => {
   }
 }, { immediate: true })
 
+// ===== Auto-drill: when search narrows results to 1, auto-navigate =====
+watch([searchedGroups, searchNorm], ([groups, q]) => {
+  if (!q || activeGroup.value || viewingItem.value) return
+  if (groups.length === 1) {
+    autoDrilling.value = true
+    setActiveGroup(groups[0])
+    nextTick(() => { autoDrilling.value = false })
+  }
+})
+
+watch([searchedCategories, searchNorm], ([cats, q]) => {
+  if (!q || !activeGroup.value || activeCategory.value || viewingItem.value) return
+  if (!groupCategories.value.length) {
+    // No categories — check items directly
+    if (searchedGroupItems.value.length === 1) {
+      autoDrilling.value = true
+      openItem(searchedGroupItems.value[0])
+      nextTick(() => { autoDrilling.value = false })
+    }
+    return
+  }
+  if (cats.length === 1) {
+    autoDrilling.value = true
+    setActiveCategory(cats[0])
+    nextTick(() => { autoDrilling.value = false })
+  }
+})
+
+watch([searchedSubcategories, searchNorm], ([subs, q]) => {
+  if (!q || !activeGroup.value || !activeCategory.value || activeSubcategory.value || viewingItem.value) return
+  if (!categorySubcategories.value.length) {
+    // No subcategories — check items directly
+    if (searchedResults.value.length === 1) {
+      autoDrilling.value = true
+      openItem(searchedResults.value[0])
+      nextTick(() => { autoDrilling.value = false })
+    }
+    return
+  }
+  if (subs.length === 1) {
+    autoDrilling.value = true
+    setActiveSubcategory(subs[0])
+    nextTick(() => { autoDrilling.value = false })
+  }
+})
+
+watch([searchedResults, searchNorm], ([results, q]) => {
+  if (!q || !activeGroup.value || viewingItem.value) return
+  // Only at leaf level (subcategory selected or no further nesting)
+  const atLeaf =
+    activeSubcategory.value !== null ||
+    (activeCategory.value !== null && categorySubcategories.value.length === 0) ||
+    (activeCategory.value === null && groupCategories.value.length === 0)
+  if (atLeaf && results.length === 1) {
+    autoDrilling.value = true
+    openItem(results[0])
+    nextTick(() => { autoDrilling.value = false })
+  }
+})
+
 // Breadcrumb navigation
 function goToGroup() {
   setActiveCategory(null)
@@ -103,6 +171,13 @@ function goToCategory(category) {
 function goToSubcategory(category, subcategory) {
   setActiveCategory(category)
   setActiveSubcategory(subcategory)
+  closeItem()
+}
+
+// Clear search when user explicitly navigates back to root
+function goToRoot() {
+  emit('update:search', '')
+  setActiveGroup(null)
   closeItem()
 }
 
@@ -339,6 +414,20 @@ function clearAllData() {
   success('Todos os dados foram apagados.')
 }
 
+// Shared search helper — checks item name, hierarchy, location, attributes, variations & extras
+function itemMatchesSearch(item, q) {
+  if (item.name.toLowerCase().includes(q)) return true
+  if ((item.category || '').toLowerCase().includes(q)) return true
+  if ((item.subcategory || '').toLowerCase().includes(q)) return true
+  if ((item.location || '').toLowerCase().includes(q)) return true
+  const vars = getVariationsForItem(item.id)
+  return vars.some(v =>
+    Object.values(v.values || {}).some(val => (val || '').toLowerCase().includes(q)) ||
+    (v.location || '').toLowerCase().includes(q) ||
+    Object.entries(v.extras || {}).some(([k, val]) => k.toLowerCase().includes(q) || (val || '').toLowerCase().includes(q))
+  )
+}
+
 // Search-filtered groups for overview
 const searchedGroups = computed(() => {
   if (!searchNorm.value) return uniqueGroups.value
@@ -346,30 +435,44 @@ const searchedGroups = computed(() => {
   return uniqueGroups.value.filter(g => {
     if (g.toLowerCase().includes(q)) return true
     const gItems = items.value.filter(i => i.group === g)
-    return gItems.some(i =>
-      (i.category || '').toLowerCase().includes(q) ||
-      (i.subcategory || '').toLowerCase().includes(q) ||
-      i.name.toLowerCase().includes(q) ||
-      (i.location || '').toLowerCase().includes(q)
-    )
+    return gItems.some(i => itemMatchesSearch(i, q))
   })
+})
+
+// Search-filtered categories for the category grid
+const searchedCategories = computed(() => {
+  if (!searchNorm.value) return groupCategories.value
+  const q = searchNorm.value
+  return groupCategories.value.filter(cat => {
+    if (cat.toLowerCase().includes(q)) return true
+    const catItems = items.value.filter(i => i.group === activeGroup.value && i.category === cat)
+    return catItems.some(i => itemMatchesSearch(i, q))
+  })
+})
+
+// Search-filtered subcategories for the subcategory grid
+const searchedSubcategories = computed(() => {
+  if (!searchNorm.value) return categorySubcategories.value
+  const q = searchNorm.value
+  return categorySubcategories.value.filter(sub => {
+    if (sub.toLowerCase().includes(q)) return true
+    const subItems = items.value.filter(i => i.group === activeGroup.value && i.category === activeCategory.value && i.subcategory === sub)
+    return subItems.some(i => itemMatchesSearch(i, q))
+  })
+})
+
+// Search-filtered items when no categories exist in a group
+const searchedGroupItems = computed(() => {
+  if (!searchNorm.value) return groupItems.value
+  const q = searchNorm.value
+  return groupItems.value.filter(item => itemMatchesSearch(item, q))
 })
 
 // Search-filtered items at the current nav level
 const searchedResults = computed(() => {
   if (!searchNorm.value) return navigationItems.value
   const q = searchNorm.value
-  return navigationItems.value.filter(item => {
-    if (item.name.toLowerCase().includes(q)) return true
-    if ((item.category || '').toLowerCase().includes(q)) return true
-    if ((item.subcategory || '').toLowerCase().includes(q)) return true
-    if ((item.location || '').toLowerCase().includes(q)) return true
-    const vars = getVariationsForItem(item.id)
-    return vars.some(v =>
-      Object.values(v.values || {}).some(val => (val || '').toLowerCase().includes(q)) ||
-      (v.location || '').toLowerCase().includes(q)
-    )
-  })
+  return navigationItems.value.filter(item => itemMatchesSearch(item, q))
 })
 </script>
 
@@ -384,7 +487,7 @@ const searchedResults = computed(() => {
           <!-- Catálogo root -->
           <button
             class="text-primary-600 dark:text-primary-400 hover:underline font-medium"
-            @click="goToGroup(); setActiveGroup(null)"
+            @click="goToRoot()"
           >Catálogo</button>
           <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
@@ -595,15 +698,20 @@ const searchedResults = computed(() => {
     <template v-else-if="activeGroup && !activeCategory">
       <!-- Breadcrumb -->
       <div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap">
-        <button class="text-primary-600 dark:text-primary-400 hover:underline font-medium" @click="setActiveGroup(null)">Catálogo</button>
+        <button class="text-primary-600 dark:text-primary-400 hover:underline font-medium" @click="goToRoot()">Catálogo</button>
         <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
         <span class="text-gray-800 dark:text-gray-100 font-semibold">{{ activeGroup }}</span>
       </div>
 
+      <!-- Count -->
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        {{ groupCategories.length ? (searchedCategories.length + ' ' + (searchedCategories.length === 1 ? 'categoria' : 'categorias')) : (searchedGroupItems.length + ' ' + (searchedGroupItems.length === 1 ? 'item' : 'itens')) }}
+      </p>
+
       <!-- Category grid -->
-      <div v-if="groupCategories.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div v-if="groupCategories.length && searchedCategories.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <button
-          v-for="cat in groupCategories"
+          v-for="cat in searchedCategories"
           :key="cat"
           class="group text-left p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all cursor-pointer"
           @click="setActiveCategory(cat)"
@@ -621,11 +729,16 @@ const searchedResults = computed(() => {
         </button>
       </div>
 
+      <!-- No search results for categories -->
+      <div v-else-if="groupCategories.length && searchNorm" class="text-center py-10 text-gray-400 dark:text-gray-500">
+        <p class="text-sm">Nenhuma categoria encontrada para "{{ searchQuery }}".</p>
+      </div>
+
       <!-- No categories — show items directly -->
-      <template v-else>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      <template v-else-if="!groupCategories.length">
+        <div v-if="searchedGroupItems.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           <button
-            v-for="item in groupItems"
+            v-for="item in searchedGroupItems"
             :key="item.id"
             class="group text-left p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all cursor-pointer"
             @click="openItem(item)"
@@ -634,6 +747,9 @@ const searchedResults = computed(() => {
             <p class="text-xs text-gray-400 dark:text-gray-500">Estoque: {{ getTotalStock(item.id) }}</p>
           </button>
         </div>
+        <div v-else-if="searchNorm" class="text-center py-10 text-gray-400 dark:text-gray-500">
+          <p class="text-sm">Nenhum item encontrado para "{{ searchQuery }}".</p>
+        </div>
       </template>
     </template>
 
@@ -641,17 +757,22 @@ const searchedResults = computed(() => {
     <template v-else-if="activeGroup && activeCategory && !activeSubcategory">
       <!-- Breadcrumb -->
       <div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap">
-        <button class="text-primary-600 dark:text-primary-400 hover:underline font-medium" @click="setActiveGroup(null)">Catálogo</button>
+        <button class="text-primary-600 dark:text-primary-400 hover:underline font-medium" @click="goToRoot()">Catálogo</button>
         <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
         <button class="text-primary-600 dark:text-primary-400 hover:underline font-medium" @click="goToGroup">{{ activeGroup }}</button>
         <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
         <span class="text-gray-800 dark:text-gray-100 font-semibold">{{ activeCategory }}</span>
       </div>
 
+      <!-- Count -->
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        {{ categorySubcategories.length ? (searchedSubcategories.length + ' ' + (searchedSubcategories.length === 1 ? 'subcategoria' : 'subcategorias')) : (searchedResults.length + ' ' + (searchedResults.length === 1 ? 'item' : 'itens')) }}
+      </p>
+
       <!-- Subcategory grid -->
-      <div v-if="categorySubcategories.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div v-if="categorySubcategories.length && searchedSubcategories.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <button
-          v-for="sub in categorySubcategories"
+          v-for="sub in searchedSubcategories"
           :key="sub"
           class="group text-left p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all cursor-pointer"
           @click="setActiveSubcategory(sub)"
@@ -669,11 +790,16 @@ const searchedResults = computed(() => {
         </button>
       </div>
 
+      <!-- No search results for subcategories -->
+      <div v-else-if="categorySubcategories.length && searchNorm" class="text-center py-10 text-gray-400 dark:text-gray-500">
+        <p class="text-sm">Nenhuma subcategoria encontrada para "{{ searchQuery }}".</p>
+      </div>
+
       <!-- No subcategories — show items directly -->
-      <template v-else>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      <template v-else-if="!categorySubcategories.length">
+        <div v-if="searchedResults.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           <button
-            v-for="item in navigationItems"
+            v-for="item in searchedResults"
             :key="item.id"
             class="group text-left p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-primary-400 dark:hover:border-primary-500 hover:shadow-md transition-all cursor-pointer"
             @click="openItem(item)"
@@ -682,6 +808,9 @@ const searchedResults = computed(() => {
             <p class="text-xs text-gray-400 dark:text-gray-500">Estoque: {{ getTotalStock(item.id) }}</p>
           </button>
         </div>
+        <div v-else-if="searchNorm" class="text-center py-10 text-gray-400 dark:text-gray-500">
+          <p class="text-sm">Nenhum item encontrado para "{{ searchQuery }}".</p>
+        </div>
       </template>
     </template>
 
@@ -689,7 +818,7 @@ const searchedResults = computed(() => {
     <template v-else-if="activeGroup && activeCategory && activeSubcategory">
       <!-- Breadcrumb -->
       <div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap">
-        <button class="text-primary-600 dark:text-primary-400 hover:underline font-medium" @click="setActiveGroup(null)">Catálogo</button>
+        <button class="text-primary-600 dark:text-primary-400 hover:underline font-medium" @click="goToRoot()">Catálogo</button>
         <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
         <button class="text-primary-600 dark:text-primary-400 hover:underline font-medium" @click="goToGroup">{{ activeGroup }}</button>
         <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
@@ -698,22 +827,10 @@ const searchedResults = computed(() => {
         <span class="text-gray-800 dark:text-gray-100 font-semibold">{{ activeSubcategory }}</span>
       </div>
 
-      <!-- Search bar -->
-      <div class="flex items-center justify-between mb-4 gap-4">
-        <p class="text-sm text-gray-500 dark:text-gray-400">
-          {{ searchedResults.length }} {{ searchedResults.length === 1 ? 'item' : 'itens' }}
-        </p>
-        <div class="relative w-64">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-          </svg>
-          <input v-model="searchQuery" type="text" placeholder="Buscar item..."
-            class="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors" />
-          <button v-if="searchQuery" class="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" @click="searchQuery = ''">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-      </div>
+      <!-- Count -->
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        {{ searchedResults.length }} {{ searchedResults.length === 1 ? 'item' : 'itens' }}
+      </p>
 
       <!-- Items grid -->
       <div v-if="searchedResults.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -746,28 +863,6 @@ const searchedResults = computed(() => {
       <div class="flex items-center justify-between mb-4 gap-4">
         <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">Catálogo</h2>
         <div class="flex items-center gap-2 ml-auto">
-          <!-- Search -->
-          <div v-if="uniqueGroups.length" class="relative w-64">
-            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-            </svg>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Buscar grupo, categoria, item..."
-              class="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
-            />
-            <button
-              v-if="searchQuery"
-              class="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              @click="searchQuery = ''"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
           <!-- Seed -->
           <div v-if="isAdmin" class="relative flex-shrink-0">
             <button

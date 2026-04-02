@@ -6,10 +6,11 @@ defineProps({
   activeGroup: { type: String, default: null },
   collapsed: { type: Boolean, default: false },
   facets: { type: Array, default: () => [] },
-  hasActiveFilters: { type: Boolean, default: false }
+  hasActiveFilters: { type: Boolean, default: false },
+  search: { type: String, default: '' }
 })
 
-defineEmits(['toggle', 'select-group', 'toggle-filter', 'clear-filters'])
+defineEmits(['toggle', 'select-group', 'toggle-filter', 'clear-filters', 'update:search'])
 
 // Sections start collapsed — track which ones the user has expanded
 const expandedSections = reactive({})
@@ -77,6 +78,30 @@ function toggleSection(key) {
       >
         Todos os Grupos
       </button>
+
+      <!-- Search -->
+      <div class="px-3 py-2.5 border-b border-gray-200 dark:border-gray-700">
+        <div class="relative">
+          <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <input
+            :value="search"
+            type="text"
+            placeholder="Buscar..."
+            class="w-full pl-8 pr-7 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
+            @input="$emit('update:search', $event.target.value)"
+          />
+          <button
+            v-if="search"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            @click="$emit('update:search', '')"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+      </div>
+
       <nav class="flex-1 overflow-y-auto py-2">
         <button
           v-for="group in groups"
@@ -106,6 +131,29 @@ function toggleSection(key) {
       <!-- Group name -->
       <div class="px-3 py-2.5 border-b border-gray-200 dark:border-gray-700">
         <h3 class="text-sm font-bold text-primary-700 dark:text-primary-400 truncate">{{ activeGroup }}</h3>
+      </div>
+
+      <!-- Search -->
+      <div class="px-3 py-2.5 border-b border-gray-200 dark:border-gray-700">
+        <div class="relative">
+          <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <input
+            :value="search"
+            type="text"
+            placeholder="Buscar item, atributo..."
+            class="w-full pl-8 pr-7 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
+            @input="$emit('update:search', $event.target.value)"
+          />
+          <button
+            v-if="search"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            @click="$emit('update:search', '')"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
       </div>
 
       <!-- Clear filters -->
