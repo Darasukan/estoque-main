@@ -1,7 +1,9 @@
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, inject } from 'vue'
 import { useItems } from '../composables/useItems.js'
 import { useToast } from '../composables/useToast.js'
+
+const isAdmin = inject('isAdmin')
 
 const {
   items, deleteItem, editItem,
@@ -326,7 +328,7 @@ const sidebarCollapsed = ref(false)
                 <th class="text-center px-3 py-2.5 font-semibold text-gray-600 dark:text-gray-300 w-14">Mín.</th>
                 <th class="text-center px-3 py-2.5 font-semibold text-gray-600 dark:text-gray-300 w-16">Estq.</th>
                 <th class="text-center px-3 py-2.5 font-semibold text-gray-600 dark:text-gray-300 w-20">Status</th>
-                <th class="text-center px-3 py-2.5 font-semibold text-gray-600 dark:text-gray-300 w-20">Ações</th>
+                <th v-if="isAdmin" class="text-center px-3 py-2.5 font-semibold text-gray-600 dark:text-gray-300 w-20">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -481,7 +483,7 @@ const sidebarCollapsed = ref(false)
                     </span>
                   </td>
                   <!-- Actions -->
-                  <td class="px-3 py-2.5" @click.stop>
+                  <td v-if="isAdmin" class="px-3 py-2.5" @click.stop>
                     <div class="flex items-center justify-center gap-1">
                       <button
                         class="p-1 text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors"

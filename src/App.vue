@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, provide } from 'vue'
 import CatalogView from './views/CatalogView.vue'
 import CadastrosView from './views/CadastrosView.vue'
 import InventarioView from './views/InventarioView.vue'
@@ -7,13 +7,18 @@ import MovimentacoesView from './views/MovimentacoesView.vue'
 import AppSidebar from './components/ui/AppSidebar.vue'
 import HistorySidebar from './components/ui/HistorySidebar.vue'
 import ToastContainer from './components/ui/ToastContainer.vue'
+import LoginModal from './components/ui/LoginModal.vue'
 import { useTheme } from './composables/useTheme.js'
 import { useItems } from './composables/useItems.js'
 import { useMovements } from './composables/useMovements.js'
+import { useAuth } from './composables/useAuth.js'
 
 const { isDark, toggleTheme } = useTheme()
 const { uniqueGroups, activeGroup, setActiveGroup, facets, hasActiveFilters, toggleFilter, clearFilters } = useItems()
 const { recentMovements } = useMovements()
+const { isAdmin, logout } = useAuth()
+provide('isAdmin', isAdmin)
+const showLoginModal = ref(false)
 const sidebarCollapsed = ref(false)
 const activeTab = ref('catalogo') // 'catalogo' | 'cadastros' | 'inventario' | 'movimentacoes'
 const movBrowsing = ref(true)
@@ -28,12 +33,13 @@ const showHistorySidebar = computed(() =>
 )
 const anySidebar = computed(() => showCatalogSidebar.value || showHistorySidebar.value)
 
-const tabs = [
+const allTabs = [
   { id: 'catalogo', label: 'Catálogo' },
-  { id: 'cadastros', label: 'Cadastros' },
+  { id: 'cadastros', label: 'Cadastros', adminOnly: true },
   { id: 'inventario', label: 'Inventário' },
   { id: 'movimentacoes', label: 'Movimentações' }
 ]
+const tabs = computed(() => allTabs.filter(t => !t.adminOnly || isAdmin.value))
 </script>
 
 <template>
@@ -101,7 +107,30 @@ const tabs = [
             </button>
           </div>
 
-          <!-- Theme toggle -->
+          <!-- Auth + Theme -->
+          <div class="flex items-center gap-1">
+          <button
+            v-if="isAdmin"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Sair do modo admin"
+            @click="logout(); activeTab = 'catalogo'"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" />
+            </svg>
+            Sair
+          </button>
+          <button
+            v-else
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Entrar como administrador"
+            @click="showLoginModal = true"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+            </svg>
+            Entrar
+          </button>
           <button
             class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             title="Alternar tema claro/escuro"
@@ -114,6 +143,7 @@ const tabs = [
               <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
             </svg>
           </button>
+          </div>
         </div>
       </nav>
 
@@ -132,6 +162,9 @@ const tabs = [
         <MovimentacoesView v-else-if="activeTab === 'movimentacoes'" ref="movRef" @update:browsing="v => movBrowsing = v" @update:sub-tab="v => movSubTab = v" />
       </main>
     </div>
+
+    <!-- Login modal -->
+    <LoginModal :show="showLoginModal" @close="showLoginModal = false" />
 
     <!-- Toasts -->
     <ToastContainer />

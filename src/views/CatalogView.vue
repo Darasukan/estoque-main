@@ -1,10 +1,12 @@
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, inject } from 'vue'
 import { useItems } from '../composables/useItems.js'
 import { useToast } from '../composables/useToast.js'
 import { useDestinations } from '../composables/useDestinations.js'
 import { useLocations } from '../composables/useLocations.js'
 import { generateSeedData } from '../data/seedData.js'
+
+const isAdmin = inject('isAdmin')
 
 const {
   items, variations,
@@ -442,6 +444,7 @@ const searchedResults = computed(() => {
           </button>
         </div>
         <button
+          v-if="isAdmin"
           class="px-4 py-2 text-sm font-medium bg-primary-700 dark:bg-primary-600 text-white rounded-lg hover:bg-primary-800 dark:hover:bg-primary-500 transition-colors flex items-center gap-1.5 flex-shrink-0"
           @click="startAddVariation"
         >
@@ -464,7 +467,7 @@ const searchedResults = computed(() => {
                 <th class="text-left px-4 py-2.5 font-semibold text-gray-600 dark:text-gray-300">Local</th>
                 <th class="text-left px-4 py-2.5 font-semibold text-gray-600 dark:text-gray-300">Destinos</th>
                 <th class="text-left px-4 py-2.5 font-semibold text-gray-600 dark:text-gray-300">Obs.</th>
-                <th class="text-center px-4 py-2.5 font-semibold text-gray-600 dark:text-gray-300 w-24">Ações</th>
+                <th v-if="isAdmin" class="text-center px-4 py-2.5 font-semibold text-gray-600 dark:text-gray-300 w-24">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -527,7 +530,7 @@ const searchedResults = computed(() => {
                   <span v-else class="text-gray-300 dark:text-gray-600">—</span>
                 </td>
                 <!-- Ações -->
-                <td class="px-4 py-2.5">
+                <td v-if="isAdmin" class="px-4 py-2.5">
                   <div class="flex items-center justify-center gap-1">
                     <button class="p-1 text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors" title="Editar" @click="startEditVariation(v)">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg>
@@ -743,7 +746,7 @@ const searchedResults = computed(() => {
           </div>
 
           <!-- Seed -->
-          <div class="relative flex-shrink-0">
+          <div v-if="isAdmin" class="relative flex-shrink-0">
             <button
               v-if="!showSeedConfirm"
               class="px-3 py-2 text-xs font-medium rounded-lg border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors flex items-center gap-1.5"
@@ -762,7 +765,7 @@ const searchedResults = computed(() => {
           </div>
 
           <!-- Clear -->
-          <div class="relative flex-shrink-0">
+          <div v-if="isAdmin" class="relative flex-shrink-0">
             <button
               v-if="!showClearConfirm"
               class="px-3 py-2 text-xs font-medium rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors flex items-center gap-1.5"

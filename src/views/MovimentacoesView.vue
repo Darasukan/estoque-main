@@ -1,10 +1,12 @@
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, inject } from 'vue'
 import { useItems } from '../composables/useItems.js'
 import { useMovements } from '../composables/useMovements.js'
 import { useDestinations } from '../composables/useDestinations.js'
 import { usePeople } from '../composables/usePeople.js'
 import { useToast } from '../composables/useToast.js'
+
+const isAdmin = inject('isAdmin')
 
 const {
   items, variations, getVariationsForItem, getTotalStock,
@@ -22,6 +24,18 @@ const emit = defineEmits(['update:browsing', 'update:subTab'])
 
 // ===== Sub-tabs =====
 const activeSubTab = ref('entrada') // 'entrada' | 'saida' | 'historico'
+
+const visibleSubTabs = computed(() => {
+  const all = [
+    { id: 'entrada',   label: 'Entrada',   icon: 'M12 4.5v15m0-15 6 6m-6-6-6 6' },
+    { id: 'saida',     label: 'Saída',     icon: 'M12 19.5v-15m0 15-6-6m6 6 6-6' },
+    { id: 'historico', label: 'Histórico', icon: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
+  ]
+  return isAdmin.value ? all : all.filter(t => t.id === 'historico')
+})
+
+// Force historico when visitor
+watch(isAdmin, (v) => { if (!v) activeSubTab.value = 'historico' }, { immediate: true })
 
 function switchSubTab(tab) {
   activeSubTab.value = tab
@@ -475,11 +489,7 @@ defineExpose({
     <!-- Sub-tabs -->
     <div class="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700">
       <button
-        v-for="tab in [
-          { id: 'entrada',   label: 'Entrada',   icon: 'M12 4.5v15m0-15 6 6m-6-6-6 6' },
-          { id: 'saida',     label: 'Saída',     icon: 'M12 19.5v-15m0 15-6-6m6 6 6-6' },
-          { id: 'historico', label: 'Histórico', icon: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
-        ]"
+        v-for="tab in visibleSubTabs"
         :key="tab.id"
         class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors relative"
         :class="activeSubTab === tab.id
@@ -1282,7 +1292,7 @@ defineExpose({
                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Estoque após</th>
                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Responsável / Local</th>
                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Doc</th>
-                    <th class="px-3 py-2.5 w-16"></th>
+                    <th v-if="isAdmin" class="px-3 py-2.5 w-16"></th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1364,7 +1374,7 @@ defineExpose({
                     </td>
 
                     <!-- Actions: edit + delete -->
-                    <td class="px-3 py-2.5 text-center">
+                    <td v-if="isAdmin" class="px-3 py-2.5 text-center">
                       <div v-if="deletePendingId === m.id" class="flex items-center gap-1">
                         <button class="text-[10px] font-bold text-red-600 dark:text-red-400 hover:underline" @click="confirmDelete(m.id)">Sim</button>
                         <span class="text-gray-300 dark:text-gray-600">/</span>

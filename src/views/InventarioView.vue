@@ -1,8 +1,10 @@
 ﻿<script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, inject } from 'vue'
 import { useItems } from '../composables/useItems.js'
 import { stockAlertStatus } from '../composables/useItems.js'
 import { useToast } from '../composables/useToast.js'
+
+const isAdmin = inject('isAdmin')
 
 const { items, getVariationsForItem, editVariation, getCategoriesForGroup, getSubcategoriesForCategory } = useItems()
 const { success, error } = useToast()
@@ -510,7 +512,7 @@ const FILTER_COUNT_CLASS = {
                 <th class="px-4 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider w-24">Qtd. atual</th>
                 <th class="px-4 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider w-20">Mín.</th>
                 <th class="px-4 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider w-32">Status</th>
-                <th class="px-4 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider w-36">Ajustar estoque</th>
+                <th v-if="isAdmin" class="px-4 py-2.5 text-center font-semibold text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider w-36">Ajustar estoque</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -586,7 +588,7 @@ const FILTER_COUNT_CLASS = {
                 </td>
 
                 <!-- Ajustar estoque -->
-                <td class="px-4 py-3 text-center">
+                <td v-if="isAdmin" class="px-4 py-3 text-center">
                   <div v-if="adjustingId === row.variation.id" class="flex items-center justify-center gap-1">
                     <input
                       ref="adjustInput"
