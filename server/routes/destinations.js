@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import crypto from 'crypto'
 import db from '../db.js'
+import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -11,7 +12,7 @@ router.get('/', (req, res) => {
 })
 
 // POST /api/destinations
-router.post('/', (req, res) => {
+router.post('/', requireAuth, (req, res) => {
   const { name, description, active, parentId } = req.body
   if (!name) return res.status(400).json({ error: 'Nome obrigatório' })
 
@@ -30,7 +31,7 @@ router.post('/', (req, res) => {
 })
 
 // PUT /api/destinations/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', requireAuth, (req, res) => {
   const { name, description, active, parentId } = req.body
   db.prepare('UPDATE destinations SET name=?, description=?, active=?, parent_id=? WHERE id=?').run(
     name, description || '', active !== false ? 1 : 0, parentId || null, req.params.id

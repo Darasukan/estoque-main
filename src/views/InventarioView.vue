@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { ref, computed, nextTick, inject } from 'vue'
+import { ref, computed, nextTick, inject, watch } from 'vue'
 import { useItems } from '../composables/useItems.js'
 import { stockAlertStatus } from '../composables/useItems.js'
 import { useMovements } from '../composables/useMovements.js'
@@ -14,6 +14,11 @@ const { success, error } = useToast()
 // ===== Search =====
 const searchQuery = ref('')
 const searchNorm = computed(() => searchQuery.value.trim().toLowerCase())
+
+// ===== Pagination =====
+const currentPage = ref(1)
+const pageSize = ref(20)
+const PAGE_SIZE_OPTIONS = [20, 40, 60, 100]
 
 // ===== Status filter =====
 const filterStatus = ref('all')
@@ -83,6 +88,18 @@ const afterHierarchy = computed(() => {
 
 // Fully filtered rows (all active filters)
 const filteredRows = computed(() => applyAttrFilters(afterHierarchy.value))
+
+// ===== Paginated rows =====
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)))
+const paginatedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredRows.value.slice(start, start + pageSize.value)
+})
+
+// Reset page when filters change
+watch([searchQuery, filterStatus, filterGroup, filterCategory, filterSubcategory, filterAttrValues, pageSize], () => {
+  currentPage.value = 1
+})
 
 // ---- Hierarchy facet options (each excludes its own filter, includes all others) ----
 const facetGroups = computed(() => {
@@ -634,7 +651,7 @@ function exportCSV() {
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
               <tr
-                v-for="row in filteredRows"
+                v-for="row in paginatedRows"
                 :key="row.variation.id"
                 class="hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition-colors"
               >
@@ -748,6 +765,69 @@ function exportCSV() {
               </tr>
             </tbody>
           </table>
+
+          <!-- Pagination controls -->
+          <div class="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/40">
+            <!-- Page size selector -->
+            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <span>Exibir</span>
+              <select
+                v-model.number="pageSize"
+                class="px-2 py-1 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:border-primary-500 transition-colors text-xs"
+              >
+                <option v-for="opt in PAGE_SIZE_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+              </select>
+              <span>por página</span>
+              <span class="text-gray-400 dark:text-gray-500 ml-2">
+                {{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, filteredRows.length) }} de {{ filteredRows.length }}
+              </span>
+            </div>
+
+            <!-- Page navigation -->
+            <div class="flex items-center gap-1">
+              <button
+                class="px-2 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 transition-colors"
+                :class="currentPage <= 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200'"
+                :disabled="currentPage <= 1"
+                @click="currentPage = 1"
+                title="Primeira página"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m18.75 19.5-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" /></svg>
+              </button>
+              <button
+                class="px-2 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 transition-colors"
+                :class="currentPage <= 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200'"
+                :disabled="currentPage <= 1"
+                @click="currentPage--"
+                title="Página anterior"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+              </button>
+
+              <span class="px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200">
+                {{ currentPage }} / {{ totalPages }}
+              </span>
+
+              <button
+                class="px-2 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 transition-colors"
+                :class="currentPage >= totalPages ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200'"
+                :disabled="currentPage >= totalPages"
+                @click="currentPage++"
+                title="Próxima página"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+              </button>
+              <button
+                class="px-2 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 transition-colors"
+                :class="currentPage >= totalPages ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200'"
+                :disabled="currentPage >= totalPages"
+                @click="currentPage = totalPages"
+                title="Última página"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" /></svg>
+              </button>
+            </div>
+          </div>
         </div>
 
       </div>

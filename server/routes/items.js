@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import crypto from 'crypto'
 import db from '../db.js'
+import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -18,7 +19,7 @@ router.get('/', (req, res) => {
 })
 
 // POST /api/items
-router.post('/', (req, res) => {
+router.post('/', requireAuth, (req, res) => {
   const { name, group, category, subcategory, unit, minStock, attributes, location } = req.body
   if (!name || !group) return res.status(400).json({ error: 'Nome e grupo obrigatórios' })
 
@@ -33,7 +34,7 @@ router.post('/', (req, res) => {
 })
 
 // PUT /api/items/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', requireAuth, (req, res) => {
   const existing = db.prepare('SELECT id FROM items WHERE id = ?').get(req.params.id)
   if (!existing) return res.status(404).json({ error: 'Item não encontrado' })
 
@@ -48,7 +49,7 @@ router.put('/:id', (req, res) => {
 })
 
 // DELETE /api/items/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM variations WHERE item_id = ?').run(req.params.id)
   db.prepare('DELETE FROM items WHERE id = ?').run(req.params.id)
   res.json({ ok: true })
@@ -73,7 +74,7 @@ router.get('/variations', (req, res) => {
 })
 
 // POST /api/items/variations
-router.post('/variations', (req, res) => {
+router.post('/variations', requireAuth, (req, res) => {
   const { itemId, values, stock, minStock, initialStock, extras, location, destinations } = req.body
   if (!itemId) return res.status(400).json({ error: 'itemId obrigatório' })
 
@@ -93,7 +94,7 @@ router.post('/variations', (req, res) => {
 })
 
 // PUT /api/items/variations/:id
-router.put('/variations/:id', (req, res) => {
+router.put('/variations/:id', requireAuth, (req, res) => {
   const existing = db.prepare('SELECT id FROM variations WHERE id = ?').get(req.params.id)
   if (!existing) return res.status(404).json({ error: 'Variação não encontrada' })
 
@@ -108,7 +109,7 @@ router.put('/variations/:id', (req, res) => {
 })
 
 // DELETE /api/items/variations/:id
-router.delete('/variations/:id', (req, res) => {
+router.delete('/variations/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM variations WHERE id = ?').run(req.params.id)
   res.json({ ok: true })
 })

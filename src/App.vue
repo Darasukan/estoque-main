@@ -64,16 +64,17 @@ async function loadAllData() {
       loadDestinations(),
       loadPeople(),
       loadRoles(),
-      loadUsers(),
     ])
   } catch (e) {
     console.error('Erro ao carregar dados:', e)
   }
+  // Users requires admin auth — load separately, ignore failure
+  try { await loadUsers() } catch {}
 }
 
 onMounted(async () => {
   await checkSession()
-  if (user.value) await loadAllData()
+  await loadAllData()
 })
 
 // Reload data after login

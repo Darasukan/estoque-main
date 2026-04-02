@@ -29,14 +29,14 @@ app.use(express.json({ limit: '10mb' }))
 // Auth (no auth required for login)
 app.use('/api/auth', authRoutes)
 
-// Protected routes
-app.use('/api/items', requireAuth, itemRoutes)
-app.use('/api/movements', requireAuth, movementRoutes)
-app.use('/api/locations', requireAuth, locationRoutes)
-app.use('/api/destinations', requireAuth, destinationRoutes)
-app.use('/api/people', requireAuth, peopleRoutes)
-app.use('/api/roles', requireAuth, roleRoutes)
-app.use('/api/seed', requireAuth, seedRoutes)
+// Public read + protected write (auth enforced per-route inside each file)
+app.use('/api/items', itemRoutes)
+app.use('/api/movements', movementRoutes)
+app.use('/api/locations', locationRoutes)
+app.use('/api/destinations', destinationRoutes)
+app.use('/api/people', peopleRoutes)
+app.use('/api/roles', roleRoutes)
+app.use('/api/seed', seedRoutes)
 
 // ===== Serve frontend in production =====
 const distPath = join(__dirname, '..', 'dist')

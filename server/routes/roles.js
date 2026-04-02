@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import crypto from 'crypto'
 import db from '../db.js'
+import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -11,7 +12,7 @@ router.get('/', (req, res) => {
 })
 
 // POST /api/roles
-router.post('/', (req, res) => {
+router.post('/', requireAuth, (req, res) => {
   const { name, description, active } = req.body
   if (!name) return res.status(400).json({ error: 'Nome obrigatório' })
 
@@ -27,7 +28,7 @@ router.post('/', (req, res) => {
 })
 
 // PUT /api/roles/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', requireAuth, (req, res) => {
   const { name, description, active } = req.body
   if (name) {
     const dup = db.prepare('SELECT id FROM roles WHERE name = ? AND id != ?').get(name, req.params.id)

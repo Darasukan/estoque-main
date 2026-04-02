@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import db from '../db.js'
-import { requireRole } from '../middleware/auth.js'
+import { requireAuth, requireRole } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -11,7 +11,7 @@ router.get('/order', (req, res) => {
 })
 
 // PUT /api/seed/order — save display order
-router.put('/order', (req, res) => {
+router.put('/order', requireAuth, (req, res) => {
   db.prepare('UPDATE display_order SET data = ? WHERE id = 1').run(JSON.stringify(req.body || {}))
   res.json({ ok: true })
 })
